@@ -22,8 +22,7 @@
     "socket.io-client": "^4.7.4",
     "react-sketch-canvas": "^6.2.0",
     "@ffmpeg/ffmpeg": "^0.12.10",
-    "@ffmpeg/util": "^0.12.1",
-    "canvas": "^2.11.2"
+    "@ffmpeg/util": "^0.12.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

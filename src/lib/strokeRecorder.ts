@@ -1,5 +1,4 @@
 import { createFFmpeg } from '@ffmpeg/ffmpeg';
-import { Canvas, createCanvas } from 'canvas';
 
 interface StrokePath {
   paths: Array<{
@@ -11,7 +10,7 @@ interface StrokePath {
 }
 
 export class StrokeRecorder {
-  private canvas: Canvas;
+  private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private ffmpeg = createFFmpeg({ log: true });
   private frameRate = 30;
@@ -21,8 +20,14 @@ export class StrokeRecorder {
   constructor(width: number, height: number) {
     this.width = width;
     this.height = height;
-    this.canvas = createCanvas(width, height);
-    this.ctx = this.canvas.getContext('2d');
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = width;
+    this.canvas.height = height;
+    const ctx = this.canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Could not get canvas context');
+    }
+    this.ctx = ctx;
   }
 
   private async init() {
@@ -54,7 +59,7 @@ export class StrokeRecorder {
     this.ctx.stroke();
   }
 
-  private createFrame(paths: StrokePath['paths'], progress: number) {
+  private createFrame(paths: StrokePath['paths'], progress: number): Uint8Array {
     this.ctx.fillStyle = 'white';
     this.ctx.fillRect(0, 0, this.width, this.height);
 
@@ -65,20 +70,22 @@ export class StrokeRecorder {
       this.drawPath(path, pathProgress);
     });
 
-    return this.canvas.toBuffer('image/png');
+    // Convert canvas to blob
+    const imageData = this.ctx.getImageData(0, 0, this.width, this.height);
+    return new Uint8Array(imageData.data.buffer);
   }
 
   public async recordStrokes(paths: StrokePath['paths']): Promise<Blob> {
     await this.init();
 
     const totalFrames = this.frameRate * 5; // 5 seconds video
-    const frames: Buffer[] = [];
+    const frames: Uint8Array[] = [];
 
     // Generate frames
     for (let i = 0; i <= totalFrames; i++) {
       const progress = i / totalFrames;
-      const frameBuffer = this.createFrame(paths, progress);
-      frames.push(frameBuffer);
+      const frameData = this.createFrame(paths, progress);
+      frames.push(frameData);
     }
 
     // Write frames to FFmpeg
