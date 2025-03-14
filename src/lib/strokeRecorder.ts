@@ -1,4 +1,4 @@
-import { createFFmpeg } from '@ffmpeg/ffmpeg';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
 
 interface StrokePath {
   paths: Array<{
@@ -12,7 +12,7 @@ interface StrokePath {
 export class StrokeRecorder {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
-  private ffmpeg = createFFmpeg({ log: true });
+  private ffmpeg = new FFmpeg();
   private frameRate = 30;
   private width: number;
   private height: number;
@@ -31,7 +31,7 @@ export class StrokeRecorder {
   }
 
   private async init() {
-    if (!this.ffmpeg.isLoaded()) {
+    if (!this.ffmpeg.loaded) {
       await this.ffmpeg.load();
     }
   }
@@ -59,7 +59,7 @@ export class StrokeRecorder {
     this.ctx.stroke();
   }
 
-  private createFrame(paths: StrokePath['paths'], progress: number): Uint8Array {
+  private async createFrame(paths: StrokePath['paths'], progress: number): Promise<Uint8Array> {
     this.ctx.fillStyle = 'white';
     this.ctx.fillRect(0, 0, this.width, this.height);
 
@@ -71,8 +71,13 @@ export class StrokeRecorder {
     });
 
     // Convert canvas to blob
-    const imageData = this.ctx.getImageData(0, 0, this.width, this.height);
-    return new Uint8Array(imageData.data.buffer);
+    const blob = await new Promise<Blob>((resolve) => {
+      this.canvas.toBlob((b) => resolve(b!), 'image/png');
+    });
+
+    // Convert blob to Uint8Array
+    const arrayBuffer = await blob.arrayBuffer();
+    return new Uint8Array(arrayBuffer);
   }
 
   public async recordStrokes(paths: StrokePath['paths']): Promise<Blob> {
@@ -84,33 +89,33 @@ export class StrokeRecorder {
     // Generate frames
     for (let i = 0; i <= totalFrames; i++) {
       const progress = i / totalFrames;
-      const frameData = this.createFrame(paths, progress);
+      const frameData = await this.createFrame(paths, progress);
       frames.push(frameData);
     }
 
     // Write frames to FFmpeg
     for (let i = 0; i < frames.length; i++) {
-      this.ffmpeg.FS('writeFile', `frame${i}.png`, frames[i]);
+      await this.ffmpeg.writeFile(`frame${i}.png`, frames[i]);
     }
 
     // Generate video from frames
-    await this.ffmpeg.run(
+    await this.ffmpeg.exec([
       '-framerate', `${this.frameRate}`,
       '-i', 'frame%d.png',
       '-c:v', 'libx264',
       '-pix_fmt', 'yuv420p',
       'output.mp4'
-    );
+    ]);
 
     // Get the output video
-    const data = this.ffmpeg.FS('readFile', 'output.mp4');
+    const data = await this.ffmpeg.readFile('output.mp4');
 
     // Cleanup
-    frames.forEach((_, i) => {
-      this.ffmpeg.FS('unlink', `frame${i}.png`);
-    });
-    this.ffmpeg.FS('unlink', 'output.mp4');
+    for (let i = 0; i < frames.length; i++) {
+      await this.ffmpeg.deleteFile(`frame${i}.png`);
+    }
+    await this.ffmpeg.deleteFile('output.mp4');
 
-    return new Blob([data.buffer], { type: 'video/mp4' });
+    return new Blob([data], { type: 'video/mp4' });
   }
 }
