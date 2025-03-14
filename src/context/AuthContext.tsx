@@ -1,13 +1,20 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { User, AuthState } from '../types/auth';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
-  register: (userData: User & { password: string }) => Promise<void>;
+  register: (userData: Omit<User, 'id'> & { password: string }) => Promise<void>;
   logout: () => void;
+}
+
+interface ApiResponse {
+  success: boolean;
+  message?: string;
+  token?: string;
+  user?: User;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,56 +42,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const handleApiError = (error: unknown) => {
+    let errorMessage = 'An unknown error occurred';
+
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError<ApiResponse>;
+      errorMessage = axiosError.response?.data?.message || axiosError.message;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
+    setState(prev => ({
+      ...prev,
+      error: errorMessage,
+      loading: false,
+    }));
+
+    throw new Error(errorMessage);
+  };
+
   const login = async (email: string, password: string) => {
     try {
-      const response = await axios.post(`${API_URL}/api/auth/login`, {
+      setState(prev => ({ ...prev, loading: true, error: null }));
+
+      const response = await axios.post<ApiResponse>(`${API_URL}/api/auth/login`, {
         email,
         password,
       });
-      
-      const { token, user } = response.data;
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
-      localStorage.setItem('userId', user.id);
+
+      if (!response.data.success || !response.data.token || !response.data.user) {
+        throw new Error(response.data.message || 'Login failed');
+      }
+
+      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem('userId', response.data.user.id);
 
       setState({
-        user,
+        user: response.data.user,
         isAuthenticated: true,
         loading: false,
         error: null,
       });
     } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: 'Invalid credentials',
-        loading: false,
-      }));
-      throw error;
+      handleApiError(error);
     }
   };
 
-  const register = async (userData: User & { password: string }) => {
+  const register = async (userData: Omit<User, 'id'> & { password: string }) => {
     try {
-      const response = await axios.post(`${API_URL}/api/auth/register`, userData);
-      
-      const { token, user } = response.data;
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
-      localStorage.setItem('userId', user.id);
+      setState(prev => ({ ...prev, loading: true, error: null }));
+
+      const response = await axios.post<ApiResponse>(`${API_URL}/api/auth/register`, userData);
+
+      if (!response.data.success || !response.data.token || !response.data.user) {
+        throw new Error(response.data.message || 'Registration failed');
+      }
+
+      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem('userId', response.data.user.id);
 
       setState({
-        user,
-        isAuthenticated: false,
+        user: response.data.user,
+        isAuthenticated: true,
         loading: false,
         error: null,
       });
     } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: 'Registration failed',
-        loading: false,
-      }));
-      throw error;
+      handleApiError(error);
     }
   };
 
