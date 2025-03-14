@@ -34,6 +34,7 @@ const io = new Server(httpServer, {
 
 // Keep track of live teachers and their sockets
 const liveTeachers = new Map(); // teacherId -> Set of student sockets
+let currentLiveTeacher = null; // Track the currently live teacher
 
 // Middleware
 app.use(cors({
@@ -54,20 +55,27 @@ io.on('connection', (socket) => {
 
   // Handle teacher status check
   socket.on('checkTeacherStatus', () => {
-    // Send current live teachers to the requesting client
-    for (const teacherId of liveTeachers.keys()) {
-      socket.emit('teacherOnline', { teacherId });
+    // Send current live teacher to the requesting client
+    if (currentLiveTeacher) {
+      socket.emit('teacherOnline', { teacherId: currentLiveTeacher });
     }
   });
 
   socket.on('startLive', (teacherId) => {
-    if (!liveTeachers.has(teacherId)) {
-      console.log('Teacher started live session:', teacherId);
-      liveTeachers.set(teacherId, new Set());
-      currentTeacherId = teacherId;
-      socket.join(`teacher-${teacherId}`);
-      io.emit('teacherOnline', { teacherId });
+    if (currentLiveTeacher) {
+      // Another teacher is already live
+      socket.emit('liveError', {
+        message: 'Another teacher is currently live. Please try again later.'
+      });
+      return;
     }
+
+    console.log('Teacher started live session:', teacherId);
+    liveTeachers.set(teacherId, new Set());
+    currentTeacherId = teacherId;
+    currentLiveTeacher = teacherId;
+    socket.join(`teacher-${teacherId}`);
+    io.emit('teacherOnline', { teacherId });
   });
 
   socket.on('stopLive', (teacherId) => {
@@ -78,6 +86,9 @@ io.on('connection', (socket) => {
         studentSocket.leave(`teacher-${teacherId}`);
       });
       liveTeachers.delete(teacherId);
+      if (currentLiveTeacher === teacherId) {
+        currentLiveTeacher = null;
+      }
       io.emit('teacherOffline', { teacherId });
     }
     if (currentTeacherId === teacherId) {
@@ -111,7 +122,7 @@ io.on('connection', (socket) => {
 
   socket.on('whiteboardUpdate', (data) => {
     console.log('Whiteboard update from teacher:', data.teacherId);
-    // Broadcast to all clients in the room except the sender
+    // Broadcast to all student in the room except the sender
     socket.broadcast.to(`teacher-${data.teacherId}`).emit('whiteboardUpdate', data);
   });
 
@@ -119,7 +130,7 @@ io.on('connection', (socket) => {
     console.log('User disconnected');
     if (currentTeacherId) {
       if (isStudent) {
-        // Remove student from teacher's list
+        // Remove student from teacher list
         if (liveTeachers.has(currentTeacherId)) {
           liveTeachers.get(currentTeacherId).delete(socket);
         }
@@ -131,6 +142,9 @@ io.on('connection', (socket) => {
             studentSocket.leave(`teacher-${currentTeacherId}`);
           });
           liveTeachers.delete(currentTeacherId);
+          if (currentLiveTeacher === currentTeacherId) {
+            currentLiveTeacher = null;
+          }
           io.emit('teacherOffline', { teacherId: currentTeacherId });
         }
       }

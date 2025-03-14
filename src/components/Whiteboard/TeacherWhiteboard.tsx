@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ReactSketchCanvas, ReactSketchCanvasRef } from 'react-sketch-canvas';
-import { Play, X, Eraser } from 'lucide-react';
+import { Play, X, Eraser, AlertCircle } from 'lucide-react';
 import { io } from 'socket.io-client';
 
 const socket = io(import.meta.env.VITE_API_URL, {
@@ -17,6 +17,7 @@ const TeacherWhiteboard: React.FC = () => {
   const [showStartModal, setShowStartModal] = useState(false);
   const [showStopModal, setShowStopModal] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -67,12 +68,20 @@ const TeacherWhiteboard: React.FC = () => {
       setIsLive(false);
     };
 
+    const handleLiveError = (data: { message: string }) => {
+      setError(data.message);
+      setShowStartModal(false);
+      setTimeout(() => setError(null), 5000); // Clear error after 5 seconds
+    };
+
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
+    socket.on('liveError', handleLiveError);
 
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
+      socket.off('liveError', handleLiveError);
       if (userId && isLive) {
         socket.emit('stopLive', userId);
       }
@@ -80,6 +89,7 @@ const TeacherWhiteboard: React.FC = () => {
   }, [isLive, handleStroke]);
 
   const handleStartLive = () => {
+    setError(null);
     setShowStartModal(true);
   };
 
@@ -162,6 +172,15 @@ const TeacherWhiteboard: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+            <AlertCircle size={20} />
+            <p>{error}</p>
+          </div>
+        )}
+
         <div id="whiteboard-container" className="border rounded-lg overflow-hidden bg-white">
           <ReactSketchCanvas
             ref={canvasRef}
