@@ -14,8 +14,6 @@ const socket: Socket = io(import.meta.env.VITE_API_URL, {
   timeout: 60000,
 });
 
-type RecordingState = 'idle' | 'starting' | 'recording' | 'stopping' | 'saving';
-
 const StudentWhiteboard: React.FC = () => {
   const canvasRef = useRef<ReactSketchCanvasRef | null>(null);
   const recorderRef = useRef<RecordRTCPromisesHandler | null>(null);
@@ -23,7 +21,9 @@ const StudentWhiteboard: React.FC = () => {
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
-  const [recordingState, setRecordingState] = useState<RecordingState>('idle');
+  const [isRecording, setIsRecording] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const lastUpdateRef = useRef<string>('[]');
 
   const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
@@ -54,25 +54,21 @@ const StudentWhiteboard: React.FC = () => {
         streamRef.current = null;
       }
       recorderRef.current = null;
-      setRecordingState('idle');
+      setIsRecording(false);
+      setIsSaving(false);
+      setIsStarting(false);
     } catch (error) {
       console.error('Error in cleanup:', error);
-      setRecordingState('idle');
     }
   }, []);
 
   const handleRecordingComplete = useCallback(async () => {
-    if (!recorderRef.current || !currentTeacherId || recordingState !== 'stopping') {
-      console.log('Cannot complete recording:', {
-        hasRecorder: !!recorderRef.current,
-        hasTeacherId: !!currentTeacherId,
-        state: recordingState
-      });
+    if (!recorderRef.current || !currentTeacherId || !isRecording) {
       return;
     }
 
     try {
-      setRecordingState('saving');
+      setIsSaving(true);
 
       const blob = await recorderRef.current.getBlob();
       if (!blob || blob.size === 0) {
@@ -107,7 +103,7 @@ const StudentWhiteboard: React.FC = () => {
     } finally {
       cleanupRecording();
     }
-  }, [currentTeacherId, cleanupRecording, recordingState]);
+  }, [currentTeacherId, cleanupRecording, isRecording]);
 
   const toggleRecording = async () => {
     if (!isTeacherLive) {
@@ -115,9 +111,7 @@ const StudentWhiteboard: React.FC = () => {
       return;
     }
 
-    if (recordingState === 'recording') {
-      // Stop recording
-      setRecordingState('stopping');
+    if (isRecording) {
       try {
         if (recorderRef.current) {
           await recorderRef.current.stopRecording();
@@ -127,9 +121,8 @@ const StudentWhiteboard: React.FC = () => {
         console.error('Error stopping recording:', error);
         cleanupRecording();
       }
-    } else if (recordingState === 'idle') {
-      // Start recording
-      setRecordingState('starting');
+    } else {
+      setIsStarting(true);
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({
           video: {
@@ -149,12 +142,11 @@ const StudentWhiteboard: React.FC = () => {
         });
 
         await recorderRef.current.startRecording();
-        setRecordingState('recording');
+        setIsRecording(true);
+        setIsStarting(false);
 
-        // Handle screen sharing stop
         stream.getVideoTracks()[0].onended = async () => {
-          if (recordingState === 'recording') {
-            setRecordingState('stopping');
+          if (isRecording && !isSaving) {
             if (recorderRef.current) {
               await recorderRef.current.stopRecording();
               await handleRecordingComplete();
@@ -173,7 +165,6 @@ const StudentWhiteboard: React.FC = () => {
     }
   };
 
-  // Handle window resize
   useEffect(() => {
     const handleResize = () => {
       const container = document.getElementById('student-whiteboard-container');
@@ -189,7 +180,6 @@ const StudentWhiteboard: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Socket event handlers
   useEffect(() => {
     const handleTeacherOnline = (data: TeacherStatus) => {
       setIsTeacherLive(true);
@@ -198,8 +188,7 @@ const StudentWhiteboard: React.FC = () => {
     };
 
     const handleTeacherOffline = async () => {
-      if (recordingState === 'recording') {
-        setRecordingState('stopping');
+      if (isRecording && !isSaving) {
         if (recorderRef.current) {
           await recorderRef.current.stopRecording();
           await handleRecordingComplete();
@@ -217,8 +206,7 @@ const StudentWhiteboard: React.FC = () => {
     };
 
     const handleDisconnect = async () => {
-      if (recordingState === 'recording') {
-        setRecordingState('stopping');
+      if (isRecording && !isSaving) {
         if (recorderRef.current) {
           await recorderRef.current.stopRecording();
           await handleRecordingComplete();
@@ -246,22 +234,14 @@ const StudentWhiteboard: React.FC = () => {
       }
       cleanupRecording();
     };
-  }, [handleWhiteboardUpdate, handleRecordingComplete, recordingState, cleanupRecording]);
-
-  const getRecordingStatus = () => {
-    switch (recordingState) {
-      case 'starting':
-        return 'Initializing recording...';
-      case 'recording':
-        return 'Recording in progress...';
-      case 'stopping':
-        return 'Stopping recording...';
-      case 'saving':
-        return 'Saving recording...';
-      default:
-        return 'Session in progress';
-    }
-  };
+  }, [
+    handleWhiteboardUpdate,
+    handleRecordingComplete,
+    isRecording,
+    isSaving,
+    currentTeacherId,
+    cleanupRecording
+  ]);
 
   if (!isTeacherLive) {
     return (
@@ -279,8 +259,7 @@ const StudentWhiteboard: React.FC = () => {
     );
   }
 
-  const isRecordingInProgress = recordingState !== 'idle';
-  const isButtonDisabled = recordingState === 'stopping' || recordingState === 'saving' || recordingState === 'starting';
+  const isButtonDisabled = isSaving || isStarting;
 
   return (
     <div className="p-4">
@@ -288,20 +267,23 @@ const StudentWhiteboard: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold">Live Whiteboard Session</h2>
           <p className="text-sm text-gray-600 mt-1">
-            {getRecordingStatus()}
+            {isSaving ? 'Saving recording...' :
+             isStarting ? 'Starting recording...' :
+             isRecording ? 'Recording in progress...' :
+             'Session in progress'}
           </p>
         </div>
         <button
           onClick={toggleRecording}
           disabled={isButtonDisabled}
           className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
-            isRecordingInProgress
+            isRecording
               ? 'bg-red-500 hover:bg-red-600'
               : 'bg-green-500 hover:bg-green-600'
           } text-white ${isButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           <Video size={20} />
-          {isRecordingInProgress ? 'Stop Recording' : 'Start Recording'}
+          {isRecording ? 'Stop Recording' : 'Start Recording'}
         </button>
       </div>
       <div id="student-whiteboard-container" className="border rounded-lg overflow-hidden bg-white">
