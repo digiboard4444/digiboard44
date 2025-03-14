@@ -4,10 +4,11 @@ import { Play, X, Eraser } from 'lucide-react';
 import { io } from 'socket.io-client';
 
 const socket = io(import.meta.env.VITE_API_URL, {
-  transports: ['websocket'],
+  transports: ['websocket', 'polling'],
   reconnection: true,
   reconnectionAttempts: 5,
-  reconnectionDelay: 1000
+  reconnectionDelay: 1000,
+  timeout: 60000,
 });
 
 const TeacherWhiteboard: React.FC = () => {
@@ -30,6 +31,24 @@ const TeacherWhiteboard: React.FC = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const handleStroke = useCallback(async () => {
+    if (isLive && canvasRef.current) {
+      try {
+        const paths = await canvasRef.current.exportPaths();
+        const userId = localStorage.getItem('userId');
+        if (userId) {
+          console.log('Sending whiteboard update');
+          socket.emit('whiteboardUpdate', {
+            teacherId: userId,
+            whiteboardData: JSON.stringify(paths)
+          });
+        }
+      } catch (error) {
+        console.error('Error handling stroke:', error);
+      }
+    }
+  }, [isLive]);
 
   useEffect(() => {
     const userId = localStorage.getItem('userId');
@@ -57,7 +76,7 @@ const TeacherWhiteboard: React.FC = () => {
         socket.emit('stopLive', userId);
       }
     };
-  }, [isLive]);
+  }, [isLive, handleStroke]);
 
   const handleStartLive = () => {
     setShowModal(true);
@@ -69,7 +88,7 @@ const TeacherWhiteboard: React.FC = () => {
       setIsLive(true);
       setShowModal(false);
       socket.emit('startLive', userId);
-      
+
       // Send initial canvas state
       const paths = await canvasRef.current.exportPaths();
       socket.emit('whiteboardUpdate', {
@@ -90,24 +109,6 @@ const TeacherWhiteboard: React.FC = () => {
     }
   };
 
-  const handleStroke = useCallback(async () => {
-    if (isLive && canvasRef.current) {
-      try {
-        const paths = await canvasRef.current.exportPaths();
-        const userId = localStorage.getItem('userId');
-        if (userId) {
-          console.log('Sending whiteboard update');
-          socket.emit('whiteboardUpdate', {
-            teacherId: userId,
-            whiteboardData: JSON.stringify(paths)
-          });
-        }
-      } catch (error) {
-        console.error('Error handling stroke:', error);
-      }
-    }
-  }, [isLive]);
-
   const handleClearCanvas = async () => {
     if (canvasRef.current && isLive) {
       await canvasRef.current.clearCanvas();
@@ -125,7 +126,7 @@ const TeacherWhiteboard: React.FC = () => {
     <>
       <div className="p-4">
         <div className="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h2 className="text-2xl font-bold">Live Whiteboard</h2>
+          <h2 className="text-2xl font-bold">Whiteboard</h2>
           <div className="flex flex-wrap gap-2">
             {isLive && (
               <button
@@ -138,8 +139,8 @@ const TeacherWhiteboard: React.FC = () => {
             <button
               onClick={isLive ? handleStopLive : handleStartLive}
               className={`flex items-center gap-2 px-4 py-2 rounded-md ${
-                isLive 
-                  ? 'bg-red-500 hover:bg-red-600' 
+                isLive
+                  ? 'bg-red-500 hover:bg-red-600'
                   : 'bg-green-500 hover:bg-green-600'
               } text-white`}
             >

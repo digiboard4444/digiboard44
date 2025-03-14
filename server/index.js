@@ -24,8 +24,12 @@ const io = new Server(httpServer, {
   cors: {
     origin: allowedOrigins,
     methods: ["GET", "POST"],
-    credentials: true
-  }
+    credentials: true,
+    transports: ['websocket', 'polling'] // Add polling as fallback
+  },
+  allowEIO3: true, // Enable Engine.IO v3 compatibility
+  pingTimeout: 60000, // Increase ping timeout
+  pingInterval: 25000 // Increase ping interval
 });
 
 // Keep track of live teachers and their sockets

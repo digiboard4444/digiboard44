@@ -6,12 +6,13 @@ import { RecordRTCPromisesHandler } from 'recordrtc';
 import { uploadSessionRecording } from '../../lib/cloudinary';
 import { WhiteboardUpdate, TeacherStatus } from '../../types/socket';
 
-// Create socket connection outside component to maintain a single instance
+// Update socket configuration
 const socket: Socket = io(import.meta.env.VITE_API_URL, {
-  transports: ['websocket'],
+  transports: ['websocket', 'polling'], // Add polling as fallback
   reconnection: true,
   reconnectionAttempts: 5,
-  reconnectionDelay: 1000
+  reconnectionDelay: 1000,
+  timeout: 60000, // Increase timeout
 });
 
 const StudentWhiteboard: React.FC = () => {
@@ -62,10 +63,10 @@ const StudentWhiteboard: React.FC = () => {
 
   const handleStopRecording = useCallback(async () => {
     if (!recorderRef.current || !currentTeacherId || isSaving) {
-      console.log('Cannot stop recording:', { 
-        hasRecorder: !!recorderRef.current, 
-        hasTeacherId: !!currentTeacherId, 
-        isSaving 
+      console.log('Cannot stop recording:', {
+        hasRecorder: !!recorderRef.current,
+        hasTeacherId: !!currentTeacherId,
+        isSaving
       });
       return;
     }
@@ -74,17 +75,17 @@ const StudentWhiteboard: React.FC = () => {
       setIsSaving(true);
       console.log('Stopping recording...');
       await recorderRef.current.stopRecording();
-      
+
       console.log('Getting blob...');
       const blob = await recorderRef.current.getBlob();
-      
+
       if (!blob || blob.size === 0) {
         throw new Error('Empty recording blob');
       }
 
       console.log('Creating video blob...');
       const videoBlob = new Blob([blob], { type: 'video/webm' });
-      
+
       console.log('Uploading to Cloudinary...');
       const videoUrl = await uploadSessionRecording(videoBlob);
       const whiteboardData = lastUpdateRef.current;
@@ -231,7 +232,7 @@ const StudentWhiteboard: React.FC = () => {
       socket.off('teacherOffline', handleTeacherOffline);
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
-      
+
       if (currentTeacherId) {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
