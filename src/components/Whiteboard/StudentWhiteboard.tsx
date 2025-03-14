@@ -11,7 +11,7 @@ const socket: Socket = io(import.meta.env.VITE_API_URL, {
   reconnection: true,
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
-  timeout: 60000,
+  timeout: 60000
 });
 
 const StudentWhiteboard: React.FC = () => {
@@ -21,9 +21,7 @@ const StudentWhiteboard: React.FC = () => {
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
-  const [isRecording, setIsRecording] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
+  const [recordingState, setRecordingState] = useState<'idle' | 'starting' | 'recording' | 'saving'>('idle');
   const lastUpdateRef = useRef<string>('[]');
 
   const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
@@ -43,11 +41,9 @@ const StudentWhiteboard: React.FC = () => {
 
   const cleanupRecording = useCallback(() => {
     console.log('Cleaning up recording...', {
+      currentState: recordingState,
       hasStream: !!streamRef.current,
-      hasRecorder: !!recorderRef.current,
-      isRecording,
-      isSaving,
-      isStarting
+      hasRecorder: !!recorderRef.current
     });
 
     try {
@@ -62,37 +58,30 @@ const StudentWhiteboard: React.FC = () => {
         streamRef.current = null;
       }
       recorderRef.current = null;
-      setIsRecording(false);
-      setIsSaving(false);
-      setIsStarting(false);
+      setRecordingState('idle');
 
-      console.log('Cleanup complete. New state:', {
-        hasStream: !!streamRef.current,
-        hasRecorder: !!recorderRef.current,
-        isRecording: false,
-        isSaving: false,
-        isStarting: false
-      });
+      console.log('Cleanup complete');
     } catch (error) {
       console.error('Error in cleanup:', error);
+      setRecordingState('idle');
     }
-  }, [isRecording, isSaving, isStarting]);
+  }, [recordingState]);
 
   const handleRecordingComplete = useCallback(async () => {
-    console.log('Handling recording completion...', {
+    console.log('Starting recording completion...', {
+      currentState: recordingState,
       hasRecorder: !!recorderRef.current,
-      hasTeacherId: !!currentTeacherId,
-      isRecording,
-      isSaving
+      hasTeacherId: !!currentTeacherId
     });
 
-    if (!recorderRef.current || !currentTeacherId || !isRecording) {
-      console.log('Cannot complete recording - missing requirements');
+    if (!recorderRef.current || !currentTeacherId || recordingState !== 'recording') {
+      console.log('Cannot complete recording - invalid state');
+      cleanupRecording();
       return;
     }
 
     try {
-      setIsSaving(true);
+      setRecordingState('saving');
       console.log('Getting blob from recorder...');
 
       const blob = await recorderRef.current.getBlob();
@@ -132,14 +121,12 @@ const StudentWhiteboard: React.FC = () => {
     } finally {
       cleanupRecording();
     }
-  }, [currentTeacherId, cleanupRecording, isRecording, isSaving]);
+  }, [currentTeacherId, cleanupRecording, recordingState]);
 
   const toggleRecording = async () => {
-    console.log('Toggle recording called. Current state:', {
+    console.log('Toggle recording called', {
+      currentState: recordingState,
       isTeacherLive,
-      isRecording,
-      isSaving,
-      isStarting,
       hasRecorder: !!recorderRef.current,
       hasStream: !!streamRef.current
     });
@@ -149,13 +136,11 @@ const StudentWhiteboard: React.FC = () => {
       return;
     }
 
-    if (isRecording) {
-      console.log('Attempting to stop recording...');
+    if (recordingState === 'recording') {
+      console.log('Stopping recording...');
       try {
         if (recorderRef.current) {
-          console.log('Stopping RecordRTC...');
           await recorderRef.current.stopRecording();
-          console.log('RecordRTC stopped, handling completion...');
           await handleRecordingComplete();
         } else {
           console.log('No recorder found to stop');
@@ -165,9 +150,9 @@ const StudentWhiteboard: React.FC = () => {
         console.error('Error stopping recording:', error);
         cleanupRecording();
       }
-    } else {
-      console.log('Attempting to start recording...');
-      setIsStarting(true);
+    } else if (recordingState === 'idle') {
+      console.log('Starting recording...');
+      setRecordingState('starting');
       try {
         console.log('Requesting screen sharing...');
         const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -190,13 +175,12 @@ const StudentWhiteboard: React.FC = () => {
 
         console.log('Starting RecordRTC...');
         await recorderRef.current.startRecording();
-        console.log('RecordRTC started successfully');
-        setIsRecording(true);
-        setIsStarting(false);
+        setRecordingState('recording');
+        console.log('Recording started successfully');
 
         stream.getVideoTracks()[0].onended = async () => {
           console.log('Screen share ended by user');
-          if (isRecording && !isSaving) {
+          if (recordingState === 'recording') {
             console.log('Auto-stopping recording due to screen share end');
             if (recorderRef.current) {
               await recorderRef.current.stopRecording();
@@ -239,7 +223,7 @@ const StudentWhiteboard: React.FC = () => {
     };
 
     const handleTeacherOffline = async () => {
-      if (isRecording && !isSaving) {
+      if (recordingState === 'recording') {
         if (recorderRef.current) {
           await recorderRef.current.stopRecording();
           await handleRecordingComplete();
@@ -257,7 +241,7 @@ const StudentWhiteboard: React.FC = () => {
     };
 
     const handleDisconnect = async () => {
-      if (isRecording && !isSaving) {
+      if (recordingState === 'recording') {
         if (recorderRef.current) {
           await recorderRef.current.stopRecording();
           await handleRecordingComplete();
@@ -288,8 +272,7 @@ const StudentWhiteboard: React.FC = () => {
   }, [
     handleWhiteboardUpdate,
     handleRecordingComplete,
-    isRecording,
-    isSaving,
+    recordingState,
     currentTeacherId,
     cleanupRecording
   ]);
@@ -297,13 +280,11 @@ const StudentWhiteboard: React.FC = () => {
   // Debug effect to log state changes
   useEffect(() => {
     console.log('Recording state changed:', {
-      isRecording,
-      isSaving,
-      isStarting,
+      state: recordingState,
       hasRecorder: !!recorderRef.current,
       hasStream: !!streamRef.current
     });
-  }, [isRecording, isSaving, isStarting]);
+  }, [recordingState]);
 
   if (!isTeacherLive) {
     return (
@@ -321,7 +302,7 @@ const StudentWhiteboard: React.FC = () => {
     );
   }
 
-  const isButtonDisabled = isSaving || isStarting;
+  const isButtonDisabled = recordingState === 'starting' || recordingState === 'saving';
 
   return (
     <div className="p-4">
@@ -329,9 +310,9 @@ const StudentWhiteboard: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold">Live Whiteboard Session</h2>
           <p className="text-sm text-gray-600 mt-1">
-            {isSaving ? 'Saving recording...' :
-             isStarting ? 'Starting recording...' :
-             isRecording ? 'Recording in progress...' :
+            {recordingState === 'saving' ? 'Saving recording...' :
+             recordingState === 'starting' ? 'Starting recording...' :
+             recordingState === 'recording' ? 'Recording in progress...' :
              'Session in progress'}
           </p>
         </div>
@@ -339,13 +320,13 @@ const StudentWhiteboard: React.FC = () => {
           onClick={toggleRecording}
           disabled={isButtonDisabled}
           className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
-            isRecording
+            recordingState === 'recording'
               ? 'bg-red-500 hover:bg-red-600'
               : 'bg-green-500 hover:bg-green-600'
           } text-white ${isButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           <Video size={20} />
-          {isRecording ? 'Stop Recording' : 'Start Recording'}
+          {recordingState === 'recording' ? 'Stop Recording' : 'Start Recording'}
         </button>
       </div>
       <div id="student-whiteboard-container" className="border rounded-lg overflow-hidden bg-white">
