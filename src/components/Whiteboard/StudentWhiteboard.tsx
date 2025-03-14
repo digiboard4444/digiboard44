@@ -14,6 +14,8 @@ const socket: Socket = io(import.meta.env.VITE_API_URL, {
   timeout: 60000,
 });
 
+type RecordingState = 'idle' | 'starting' | 'recording' | 'stopping' | 'saving';
+
 const StudentWhiteboard: React.FC = () => {
   const canvasRef = useRef<ReactSketchCanvasRef | null>(null);
   const recorderRef = useRef<RecordRTCPromisesHandler | null>(null);
@@ -21,8 +23,7 @@ const StudentWhiteboard: React.FC = () => {
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
-  const [isRecording, setIsRecording] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const lastUpdateRef = useRef<string>('[]');
 
   const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
@@ -53,43 +54,35 @@ const StudentWhiteboard: React.FC = () => {
         streamRef.current = null;
       }
       recorderRef.current = null;
-      setIsRecording(false);
-      setIsSaving(false);
+      setRecordingState('idle');
     } catch (error) {
       console.error('Error in cleanup:', error);
+      setRecordingState('idle');
     }
   }, []);
 
-  const handleStopRecording = useCallback(async () => {
-    if (!recorderRef.current || !currentTeacherId || isSaving) {
-      console.log('Cannot stop recording:', {
+  const handleRecordingComplete = useCallback(async () => {
+    if (!recorderRef.current || !currentTeacherId || recordingState !== 'stopping') {
+      console.log('Cannot complete recording:', {
         hasRecorder: !!recorderRef.current,
         hasTeacherId: !!currentTeacherId,
-        isSaving
+        state: recordingState
       });
       return;
     }
 
     try {
-      setIsSaving(true);
-      console.log('Stopping recording...');
-      await recorderRef.current.stopRecording();
+      setRecordingState('saving');
 
-      console.log('Getting blob...');
       const blob = await recorderRef.current.getBlob();
-
       if (!blob || blob.size === 0) {
         throw new Error('Empty recording blob');
       }
 
-      console.log('Creating video blob...');
       const videoBlob = new Blob([blob], { type: 'video/webm' });
-
-      console.log('Uploading to Cloudinary...');
       const videoUrl = await uploadSessionRecording(videoBlob);
       const whiteboardData = lastUpdateRef.current;
 
-      console.log('Saving session to backend...');
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/sessions`, {
         method: 'POST',
         headers: {
@@ -107,75 +100,76 @@ const StudentWhiteboard: React.FC = () => {
         throw new Error('Failed to save session');
       }
 
-      console.log('Session saved successfully');
-      cleanupRecording();
       alert('Session recorded and saved successfully!');
     } catch (error) {
       console.error('Error saving recording:', error);
-      cleanupRecording();
       alert('Failed to save recording. Please try again.');
-    }
-  }, [currentTeacherId, cleanupRecording, isSaving]);
-
-  const handleStartRecording = async () => {
-    if (!isTeacherLive) {
-      alert('Cannot start recording when teacher is not live');
-      return;
-    }
-
-    if (isRecording || isSaving) {
-      return;
-    }
-
-    try {
-      console.log('Requesting screen sharing...');
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          displaySurface: 'browser',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        }
-      });
-
-      console.log('Setting up recorder...');
-      streamRef.current = stream;
-      recorderRef.current = new RecordRTCPromisesHandler(stream, {
-        type: 'video',
-        mimeType: 'video/webm',
-        disableLogs: false,
-        timeSlice: 1000,
-        bitsPerSecond: 128000,
-        frameInterval: 90
-      });
-
-      console.log('Starting recording...');
-      await recorderRef.current.startRecording();
-      setIsRecording(true);
-      console.log('Recording started successfully');
-
-      // Handle when user stops sharing screen
-      stream.getVideoTracks()[0].onended = async () => {
-        console.log('Screen sharing ended');
-        if (isRecording && !isSaving) {
-          await handleStopRecording();
-        }
-      };
-    } catch (error) {
-      console.error('Error starting recording:', error);
+    } finally {
       cleanupRecording();
-      if (error instanceof Error && error.name === 'NotAllowedError') {
-        alert('Please allow screen recording to continue with the session.');
-      } else {
-        alert('Failed to start recording. Please try again.');
-      }
     }
-  };
+  }, [currentTeacherId, cleanupRecording, recordingState]);
 
   const toggleRecording = async () => {
-    if (isRecording) {
-      await handleStopRecording();
-    } else {
-      await handleStartRecording();
+    if (!isTeacherLive) {
+      alert('Cannot record when teacher is not live');
+      return;
+    }
+
+    if (recordingState === 'recording') {
+      // Stop recording
+      setRecordingState('stopping');
+      try {
+        if (recorderRef.current) {
+          await recorderRef.current.stopRecording();
+          await handleRecordingComplete();
+        }
+      } catch (error) {
+        console.error('Error stopping recording:', error);
+        cleanupRecording();
+      }
+    } else if (recordingState === 'idle') {
+      // Start recording
+      setRecordingState('starting');
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            displaySurface: 'browser',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          }
+        });
+
+        streamRef.current = stream;
+        recorderRef.current = new RecordRTCPromisesHandler(stream, {
+          type: 'video',
+          mimeType: 'video/webm;codecs=vp9',
+          frameRate: 30,
+          quality: 'high',
+          disableLogs: false,
+        });
+
+        await recorderRef.current.startRecording();
+        setRecordingState('recording');
+
+        // Handle screen sharing stop
+        stream.getVideoTracks()[0].onended = async () => {
+          if (recordingState === 'recording') {
+            setRecordingState('stopping');
+            if (recorderRef.current) {
+              await recorderRef.current.stopRecording();
+              await handleRecordingComplete();
+            }
+          }
+        };
+      } catch (error) {
+        console.error('Error starting recording:', error);
+        cleanupRecording();
+        if (error instanceof Error && error.name === 'NotAllowedError') {
+          alert('Please allow screen recording to continue.');
+        } else {
+          alert('Failed to start recording. Please try again.');
+        }
+      }
     }
   };
 
@@ -204,8 +198,12 @@ const StudentWhiteboard: React.FC = () => {
     };
 
     const handleTeacherOffline = async () => {
-      if (isRecording && !isSaving) {
-        await handleStopRecording();
+      if (recordingState === 'recording') {
+        setRecordingState('stopping');
+        if (recorderRef.current) {
+          await recorderRef.current.stopRecording();
+          await handleRecordingComplete();
+        }
       }
       setIsTeacherLive(false);
       setCurrentTeacherId(null);
@@ -219,8 +217,12 @@ const StudentWhiteboard: React.FC = () => {
     };
 
     const handleDisconnect = async () => {
-      if (isRecording && !isSaving) {
-        await handleStopRecording();
+      if (recordingState === 'recording') {
+        setRecordingState('stopping');
+        if (recorderRef.current) {
+          await recorderRef.current.stopRecording();
+          await handleRecordingComplete();
+        }
       }
     };
 
@@ -230,7 +232,6 @@ const StudentWhiteboard: React.FC = () => {
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
 
-    // Initial check for teacher status
     socket.emit('checkTeacherStatus');
 
     return () => {
@@ -245,14 +246,22 @@ const StudentWhiteboard: React.FC = () => {
       }
       cleanupRecording();
     };
-  }, [
-    handleWhiteboardUpdate,
-    handleStopRecording,
-    isRecording,
-    isSaving,
-    currentTeacherId,
-    cleanupRecording
-  ]);
+  }, [handleWhiteboardUpdate, handleRecordingComplete, recordingState, cleanupRecording]);
+
+  const getRecordingStatus = () => {
+    switch (recordingState) {
+      case 'starting':
+        return 'Initializing recording...';
+      case 'recording':
+        return 'Recording in progress...';
+      case 'stopping':
+        return 'Stopping recording...';
+      case 'saving':
+        return 'Saving recording...';
+      default:
+        return 'Session in progress';
+    }
+  };
 
   if (!isTeacherLive) {
     return (
@@ -270,26 +279,29 @@ const StudentWhiteboard: React.FC = () => {
     );
   }
 
+  const isRecordingInProgress = recordingState !== 'idle';
+  const isButtonDisabled = recordingState === 'stopping' || recordingState === 'saving' || recordingState === 'starting';
+
   return (
     <div className="p-4">
       <div className="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold">Live Whiteboard Session</h2>
           <p className="text-sm text-gray-600 mt-1">
-            {isSaving ? 'Saving recording...' : isRecording ? 'Recording in progress...' : 'Session in progress'}
+            {getRecordingStatus()}
           </p>
         </div>
         <button
           onClick={toggleRecording}
-          disabled={isSaving}
+          disabled={isButtonDisabled}
           className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
-            isRecording
+            isRecordingInProgress
               ? 'bg-red-500 hover:bg-red-600'
               : 'bg-green-500 hover:bg-green-600'
-          } text-white ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+          } text-white ${isButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           <Video size={20} />
-          {isRecording ? 'Stop Recording' : 'Start Recording'}
+          {isRecordingInProgress ? 'Stop Recording' : 'Start Recording'}
         </button>
       </div>
       <div id="student-whiteboard-container" className="border rounded-lg overflow-hidden bg-white">
