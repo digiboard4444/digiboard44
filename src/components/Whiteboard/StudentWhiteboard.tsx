@@ -1,18 +1,17 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ReactSketchCanvas, ReactSketchCanvasRef } from 'react-sketch-canvas';
-import { Video, Square } from 'lucide-react';
+import { Video } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { RecordRTCPromisesHandler } from 'recordrtc';
 import { uploadSessionRecording } from '../../lib/cloudinary';
 import { WhiteboardUpdate, TeacherStatus } from '../../types/socket';
 
-// Update socket configuration
 const socket: Socket = io(import.meta.env.VITE_API_URL, {
-  transports: ['websocket', 'polling'], // Add polling as fallback
+  transports: ['websocket', 'polling'],
   reconnection: true,
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
-  timeout: 60000, // Increase timeout
+  timeout: 60000,
 });
 
 const StudentWhiteboard: React.FC = () => {
@@ -172,6 +171,14 @@ const StudentWhiteboard: React.FC = () => {
     }
   };
 
+  const toggleRecording = async () => {
+    if (isRecording) {
+      await handleStopRecording();
+    } else {
+      await handleStartRecording();
+    }
+  };
+
   // Handle window resize
   useEffect(() => {
     const handleResize = () => {
@@ -272,26 +279,18 @@ const StudentWhiteboard: React.FC = () => {
             {isSaving ? 'Saving recording...' : isRecording ? 'Recording in progress...' : 'Session in progress'}
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleStartRecording}
-            disabled={isRecording || isSaving}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md bg-green-500 hover:bg-green-600 text-white transition-colors ${
-              (isRecording || isSaving) ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            <Video size={20} /> Start Recording
-          </button>
-          <button
-            onClick={handleStopRecording}
-            disabled={!isRecording || isSaving}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors ${
-              (!isRecording || isSaving) ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            <Square size={20} /> Stop Recording
-          </button>
-        </div>
+        <button
+          onClick={toggleRecording}
+          disabled={isSaving}
+          className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
+            isRecording
+              ? 'bg-red-500 hover:bg-red-600'
+              : 'bg-green-500 hover:bg-green-600'
+          } text-white ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          <Video size={20} />
+          {isRecording ? 'Stop Recording' : 'Start Recording'}
+        </button>
       </div>
       <div id="student-whiteboard-container" className="border rounded-lg overflow-hidden bg-white">
         <ReactSketchCanvas
