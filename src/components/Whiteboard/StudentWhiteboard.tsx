@@ -42,6 +42,14 @@ const StudentWhiteboard: React.FC = () => {
   }, []);
 
   const cleanupRecording = useCallback(() => {
+    console.log('Cleaning up recording...', {
+      hasStream: !!streamRef.current,
+      hasRecorder: !!recorderRef.current,
+      isRecording,
+      isSaving,
+      isStarting
+    });
+
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => {
@@ -57,28 +65,48 @@ const StudentWhiteboard: React.FC = () => {
       setIsRecording(false);
       setIsSaving(false);
       setIsStarting(false);
+
+      console.log('Cleanup complete. New state:', {
+        hasStream: !!streamRef.current,
+        hasRecorder: !!recorderRef.current,
+        isRecording: false,
+        isSaving: false,
+        isStarting: false
+      });
     } catch (error) {
       console.error('Error in cleanup:', error);
     }
-  }, []);
+  }, [isRecording, isSaving, isStarting]);
 
   const handleRecordingComplete = useCallback(async () => {
+    console.log('Handling recording completion...', {
+      hasRecorder: !!recorderRef.current,
+      hasTeacherId: !!currentTeacherId,
+      isRecording,
+      isSaving
+    });
+
     if (!recorderRef.current || !currentTeacherId || !isRecording) {
+      console.log('Cannot complete recording - missing requirements');
       return;
     }
 
     try {
       setIsSaving(true);
+      console.log('Getting blob from recorder...');
 
       const blob = await recorderRef.current.getBlob();
       if (!blob || blob.size === 0) {
         throw new Error('Empty recording blob');
       }
 
+      console.log('Creating video blob...', { blobSize: blob.size });
       const videoBlob = new Blob([blob], { type: 'video/webm' });
+      console.log('Uploading to Cloudinary...');
       const videoUrl = await uploadSessionRecording(videoBlob);
       const whiteboardData = lastUpdateRef.current;
 
+      console.log('Saving session to backend...');
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/sessions`, {
         method: 'POST',
         headers: {
@@ -96,6 +124,7 @@ const StudentWhiteboard: React.FC = () => {
         throw new Error('Failed to save session');
       }
 
+      console.log('Session saved successfully');
       alert('Session recorded and saved successfully!');
     } catch (error) {
       console.error('Error saving recording:', error);
@@ -103,27 +132,44 @@ const StudentWhiteboard: React.FC = () => {
     } finally {
       cleanupRecording();
     }
-  }, [currentTeacherId, cleanupRecording, isRecording]);
+  }, [currentTeacherId, cleanupRecording, isRecording, isSaving]);
 
   const toggleRecording = async () => {
+    console.log('Toggle recording called. Current state:', {
+      isTeacherLive,
+      isRecording,
+      isSaving,
+      isStarting,
+      hasRecorder: !!recorderRef.current,
+      hasStream: !!streamRef.current
+    });
+
     if (!isTeacherLive) {
       alert('Cannot record when teacher is not live');
       return;
     }
 
     if (isRecording) {
+      console.log('Attempting to stop recording...');
       try {
         if (recorderRef.current) {
+          console.log('Stopping RecordRTC...');
           await recorderRef.current.stopRecording();
+          console.log('RecordRTC stopped, handling completion...');
           await handleRecordingComplete();
+        } else {
+          console.log('No recorder found to stop');
+          cleanupRecording();
         }
       } catch (error) {
         console.error('Error stopping recording:', error);
         cleanupRecording();
       }
     } else {
+      console.log('Attempting to start recording...');
       setIsStarting(true);
       try {
+        console.log('Requesting screen sharing...');
         const stream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             displaySurface: 'browser',
@@ -132,6 +178,7 @@ const StudentWhiteboard: React.FC = () => {
           }
         });
 
+        console.log('Screen share granted, setting up recorder...');
         streamRef.current = stream;
         recorderRef.current = new RecordRTCPromisesHandler(stream, {
           type: 'video',
@@ -141,12 +188,16 @@ const StudentWhiteboard: React.FC = () => {
           disableLogs: false,
         });
 
+        console.log('Starting RecordRTC...');
         await recorderRef.current.startRecording();
+        console.log('RecordRTC started successfully');
         setIsRecording(true);
         setIsStarting(false);
 
         stream.getVideoTracks()[0].onended = async () => {
+          console.log('Screen share ended by user');
           if (isRecording && !isSaving) {
+            console.log('Auto-stopping recording due to screen share end');
             if (recorderRef.current) {
               await recorderRef.current.stopRecording();
               await handleRecordingComplete();
@@ -242,6 +293,17 @@ const StudentWhiteboard: React.FC = () => {
     currentTeacherId,
     cleanupRecording
   ]);
+
+  // Debug effect to log state changes
+  useEffect(() => {
+    console.log('Recording state changed:', {
+      isRecording,
+      isSaving,
+      isStarting,
+      hasRecorder: !!recorderRef.current,
+      hasStream: !!streamRef.current
+    });
+  }, [isRecording, isSaving, isStarting]);
 
   if (!isTeacherLive) {
     return (
