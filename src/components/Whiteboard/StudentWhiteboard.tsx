@@ -4,15 +4,23 @@ import { io, Socket } from 'socket.io-client';
 import { WhiteboardUpdate, TeacherStatus } from '../../types/socket';
 import { StrokeRecorder } from '../../lib/strokeRecorder';
 import { uploadSessionRecording } from '../../lib/cloudinary';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 
-const socket: Socket = io(import.meta.env.VITE_API_URL, {
-  transports: ['websocket', 'polling'],
-  reconnection: true,
-  reconnectionAttempts: 5,
-  reconnectionDelay: 1000,
-  timeout: 60000
-});
+let socket: Socket | null = null;
+
+const initializeSocket = () => {
+  if (!socket) {
+    socket = io(import.meta.env.VITE_API_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 60000,
+      withCredentials: true
+    });
+  }
+  return socket;
+};
 
 const StudentWhiteboard: React.FC = () => {
   const canvasRef = useRef<ReactSketchCanvasRef | null>(null);
@@ -22,6 +30,7 @@ const StudentWhiteboard: React.FC = () => {
   const lastUpdateRef = useRef<string>('[]');
   const sessionStartTimeRef = useRef<Date | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
     if (!canvasRef.current) return;
@@ -96,7 +105,10 @@ const StudentWhiteboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const socket = initializeSocket();
+
     const handleTeacherOnline = (data: TeacherStatus) => {
+      setConnectionError(null);
       setIsTeacherLive(true);
       setCurrentTeacherId(data.teacherId);
       socket.emit('joinTeacherRoom', data.teacherId);
@@ -114,13 +126,29 @@ const StudentWhiteboard: React.FC = () => {
     };
 
     const handleConnect = () => {
+      setConnectionError(null);
       socket.emit('checkTeacherStatus');
+    };
+
+    const handleConnectError = (error: Error) => {
+      console.error('Socket connection error:', error);
+      setConnectionError('Unable to connect to the server. Please check your internet connection.');
+    };
+
+    const handleDisconnect = (reason: string) => {
+      console.log('Socket disconnected:', reason);
+      if (reason === 'io server disconnect') {
+        socket.connect(); // Automatically try to reconnect
+      }
+      setConnectionError('Connection lost. Attempting to reconnect...');
     };
 
     socket.on('whiteboardUpdate', handleWhiteboardUpdate);
     socket.on('teacherOnline', handleTeacherOnline);
     socket.on('teacherOffline', handleTeacherOffline);
     socket.on('connect', handleConnect);
+    socket.on('connect_error', handleConnectError);
+    socket.on('disconnect', handleDisconnect);
 
     socket.emit('checkTeacherStatus');
 
@@ -129,12 +157,33 @@ const StudentWhiteboard: React.FC = () => {
       socket.off('teacherOnline', handleTeacherOnline);
       socket.off('teacherOffline', handleTeacherOffline);
       socket.off('connect', handleConnect);
+      socket.off('connect_error', handleConnectError);
+      socket.off('disconnect', handleDisconnect);
 
       if (currentTeacherId) {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
     };
   }, [handleWhiteboardUpdate, saveSession, currentTeacherId]);
+
+  if (connectionError) {
+    return (
+      <div className="p-4">
+        <div className="mb-4">
+          <h2 className="text-2xl font-bold">Live Whiteboard</h2>
+        </div>
+        <div className="border rounded-lg overflow-hidden bg-white p-8">
+          <div className="flex items-center justify-center min-h-[300px] sm:min-h-[400px] md:min-h-[500px]">
+            <div className="text-center text-red-600">
+              <AlertCircle className="w-12 h-12 mx-auto mb-4" />
+              <p className="text-xl font-semibold mb-2">Connection Error</p>
+              <p>{connectionError}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isTeacherLive) {
     return (
