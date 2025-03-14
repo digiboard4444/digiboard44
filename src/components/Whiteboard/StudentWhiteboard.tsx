@@ -4,6 +4,7 @@ import { io, Socket } from 'socket.io-client';
 import { WhiteboardUpdate, TeacherStatus } from '../../types/socket';
 import { StrokeRecorder } from '../../lib/strokeRecorder';
 import { uploadSessionRecording } from '../../lib/cloudinary';
+import { Loader2 } from 'lucide-react';
 
 const socket: Socket = io(import.meta.env.VITE_API_URL, {
   transports: ['websocket', 'polling'],
@@ -152,27 +153,44 @@ const StudentWhiteboard: React.FC = () => {
   }
 
   return (
-    <div className="p-4">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold">Live Whiteboard Session</h2>
-        <p className="text-sm text-gray-600 mt-1">Session in progress</p>
+    <>
+      <div className="p-4">
+        <div className="mb-4">
+          <h2 className="text-2xl font-bold">Live Whiteboard Session</h2>
+          <p className="text-sm text-gray-600 mt-1">Session in progress</p>
+        </div>
+        <div id="student-whiteboard-container" className="border rounded-lg overflow-hidden bg-white">
+          <ReactSketchCanvas
+            ref={canvasRef}
+            strokeWidth={4}
+            strokeColor="black"
+            width={`${canvasSize.width}px`}
+            height={`${canvasSize.height}px`}
+            style={{ pointerEvents: 'none' }}
+            canvasColor="white"
+            exportWithBackgroundImage={false}
+            withTimestamp={false}
+            allowOnlyPointerType="all"
+            className="touch-none"
+          />
+        </div>
       </div>
-      <div id="student-whiteboard-container" className="border rounded-lg overflow-hidden bg-white">
-        <ReactSketchCanvas
-          ref={canvasRef}
-          strokeWidth={4}
-          strokeColor="black"
-          width={`${canvasSize.width}px`}
-          height={`${canvasSize.height}px`}
-          style={{ pointerEvents: 'none' }}
-          canvasColor="white"
-          exportWithBackgroundImage={false}
-          withTimestamp={false}
-          allowOnlyPointerType="all"
-          className="touch-none"
-        />
-      </div>
-    </div>
+
+      {/* Saving Modal */}
+      {isSaving && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+            <div className="flex flex-col items-center">
+              <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Saving Session</h3>
+              <p className="text-gray-600 text-center">
+                Please wait while we save your session recording...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

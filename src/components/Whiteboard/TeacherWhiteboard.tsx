@@ -14,7 +14,8 @@ const socket = io(import.meta.env.VITE_API_URL, {
 const TeacherWhiteboard: React.FC = () => {
   const canvasRef = useRef<ReactSketchCanvasRef | null>(null);
   const [isLive, setIsLive] = useState(false);
-  const [showModal, setShowModal] = useState(false);
+  const [showStartModal, setShowStartModal] = useState(false);
+  const [showStopModal, setShowStopModal] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
 
   useEffect(() => {
@@ -79,14 +80,18 @@ const TeacherWhiteboard: React.FC = () => {
   }, [isLive, handleStroke]);
 
   const handleStartLive = () => {
-    setShowModal(true);
+    setShowStartModal(true);
+  };
+
+  const handleStopLive = () => {
+    setShowStopModal(true);
   };
 
   const confirmStartLive = async () => {
     const userId = localStorage.getItem('userId');
     if (userId && canvasRef.current) {
       setIsLive(true);
-      setShowModal(false);
+      setShowStartModal(false);
       socket.emit('startLive', userId);
 
       // Send initial canvas state
@@ -98,10 +103,11 @@ const TeacherWhiteboard: React.FC = () => {
     }
   };
 
-  const handleStopLive = () => {
+  const confirmStopLive = () => {
     const userId = localStorage.getItem('userId');
     if (userId) {
       setIsLive(false);
+      setShowStopModal(false);
       socket.emit('stopLive', userId);
       if (canvasRef.current) {
         canvasRef.current.clearCanvas();
@@ -174,8 +180,8 @@ const TeacherWhiteboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Confirmation Modal */}
-      {showModal && (
+      {/* Start Session Modal */}
+      {showStartModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-xl font-bold mb-4">Start Live Session</h3>
@@ -184,7 +190,7 @@ const TeacherWhiteboard: React.FC = () => {
             </p>
             <div className="flex flex-col sm:flex-row justify-end gap-3">
               <button
-                onClick={() => setShowModal(false)}
+                onClick={() => setShowStartModal(false)}
                 className="px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-800"
               >
                 Cancel
@@ -194,6 +200,32 @@ const TeacherWhiteboard: React.FC = () => {
                 className="px-4 py-2 rounded-md bg-green-500 hover:bg-green-600 text-white"
               >
                 Start Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stop Session Modal */}
+      {showStopModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold mb-4">Stop Live Session</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to end the live session? All connected students will be disconnected and their sessions will be saved.
+            </p>
+            <div className="flex flex-col sm:flex-row justify-end gap-3">
+              <button
+                onClick={() => setShowStopModal(false)}
+                className="px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmStopLive}
+                className="px-4 py-2 rounded-md bg-red-500 hover:bg-red-600 text-white"
+              >
+                End Session
               </button>
             </div>
           </div>
