@@ -8,7 +8,7 @@ const StudentDashboard = () => {
   return (
     <Layout>
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-6">Welcome, {user?.firstName}!</h1>
+        <h1 className="text-2xl font-bold mb-6 text-green-900">Welcome, {user?.firstName}!</h1>
         <div className="bg-white rounded-lg shadow p-6">
           <p className="text-gray-600">
             Access your live whiteboard sessions or view saved lessons using the sidebar navigation.

@@ -74,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setState({
         user,
-        isAuthenticated: true,
+        isAuthenticated: false,
         loading: false,
         error: null,
       });

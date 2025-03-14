@@ -125,7 +125,7 @@ const TeacherWhiteboard: React.FC = () => {
     <>
       <div className="p-4">
         <div className="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h2 className="text-2xl font-bold">Whiteboard</h2>
+          <h2 className="text-2xl font-bold">Live Whiteboard</h2>
           <div className="flex flex-wrap gap-2">
             {isLive && (
               <button

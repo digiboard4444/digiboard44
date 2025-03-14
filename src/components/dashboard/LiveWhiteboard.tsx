@@ -22,7 +22,7 @@ const LiveWhiteboard = () => {
               </p>
               <button
                 onClick={handleJoinSession}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg mx-auto transition-colors"
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg mx-auto transition-colors"
               >
                 <Video size={20} />
                 Join Live Session

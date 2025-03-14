@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { LayoutDashboard, Video, BookOpen, LogOut, Menu } from 'lucide-react';
+import { LayoutDashboard, Video, BookOpen, LogOut, Menu, } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -51,7 +51,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen h-screen bg-gray-100 flex overflow-hidden">
+    <div className="min-h-screen h-screen bg-slate-50 flex overflow-hidden">
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div
@@ -62,13 +62,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Sidebar */}
       <div
-        className={`fixed lg:relative w-64 bg-white shadow-lg z-50 h-full transform transition-transform duration-300 ease-in-out ${
+        className={`fixed lg:relative w-64 bg-green-950 shadow-lg z-50 h-full transform transition-transform duration-300 ease-in-out ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         <div className="flex flex-col h-full">
           <div className="p-4 flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-indigo-600">DigiBoard</h1>
+            <h1 className="text-2xl font-bold text-yellow-400">DIGIBOARD</h1>
             <button
               onClick={toggleSidebar}
               className="lg:hidden text-gray-500 hover:text-gray-700"
@@ -89,8 +89,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       }}
                       className={`w-full flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors ${
                         location.pathname === item.path
-                          ? 'bg-indigo-50 text-indigo-700'
-                          : 'text-gray-600 hover:bg-gray-50'
+                          ? 'bg-gold text-green-900'
+                          : 'text-white hover:bg-gold'
                       }`}
                     >
                       <Icon size={20} />
@@ -101,10 +101,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               })}
             </ul>
           </nav>
-          <div className="p-4 border-t">
+          <div className="p-4 border-t border-green-700">
             <button
               onClick={handleLogout}
-              className="w-full flex items-center space-x-3 px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+              className="w-full flex items-center space-x-3 px-4 py-2 text-white hover:bg-red-500 rounded-lg transition-colors"
             >
               <LogOut size={20} />
               <span>Logout</span>
@@ -116,14 +116,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Mobile Header */}
-        <div className="lg:hidden bg-white shadow-sm p-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-indigo-600">DigiBoard</h1>
-          <button
-            onClick={toggleSidebar}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <Menu size={24} />
-          </button>
+        <div className="lg:hidden bg-green-600 shadow-sm p-4 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <h1 className="text-xl font-bold text-gold">DIGIBOARD</h1>
+            <button
+              onClick={toggleSidebar}
+              className="text-gray-200 hover:text-gray-400"
+            >
+              <Menu size={24} />
+            </button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto">
           {children}
