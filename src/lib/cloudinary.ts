@@ -12,11 +12,6 @@ export const uploadSessionRecording = async (videoBlob: Blob): Promise<string> =
     formData.append('resource_type', 'video');
     formData.append('folder', 'session_recordings');
 
-    // Add optimization parameters
-    formData.append('quality', 'auto');
-    formData.append('format', 'mp4');
-    formData.append('transformation', 'f_auto,q_auto');
-
     console.log('Uploading to Cloudinary...');
 
     const response = await fetch(CLOUDINARY_UPLOAD_URL, {
