@@ -2,14 +2,23 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ReactSketchCanvas, ReactSketchCanvasRef } from 'react-sketch-canvas';
 import { Play, X, Eraser, AlertCircle } from 'lucide-react';
 import { io } from 'socket.io-client';
+import type { TypedSocket } from '../../types/socket';
 
-const socket = io(import.meta.env.VITE_API_URL, {
-  transports: ['websocket', 'polling'],
-  reconnection: true,
-  reconnectionAttempts: 5,
-  reconnectionDelay: 1000,
-  timeout: 60000,
-});
+let socket: TypedSocket | null = null;
+
+const initializeSocket = () => {
+  if (!socket) {
+    socket = io(import.meta.env.VITE_API_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 60000,
+      withCredentials: true
+    }) as TypedSocket;
+  }
+  return socket;
+};
 
 const TeacherWhiteboard: React.FC = () => {
   const canvasRef = useRef<ReactSketchCanvasRef | null>(null);
@@ -18,6 +27,7 @@ const TeacherWhiteboard: React.FC = () => {
   const [showStopModal, setShowStopModal] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [error, setError] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -35,7 +45,7 @@ const TeacherWhiteboard: React.FC = () => {
   }, []);
 
   const handleStroke = useCallback(async () => {
-    if (isLive && canvasRef.current) {
+    if (isLive && canvasRef.current && socket) {
       try {
         const paths = await canvasRef.current.exportPaths();
         const userId = localStorage.getItem('userId');
@@ -53,10 +63,12 @@ const TeacherWhiteboard: React.FC = () => {
   }, [isLive]);
 
   useEffect(() => {
+    const socket = initializeSocket();
     const userId = localStorage.getItem('userId');
 
     const handleConnect = () => {
       console.log('Connected to server');
+      setIsConnecting(false);
       if (isLive && userId) {
         socket.emit('startLive', userId);
         handleStroke(); // Send current canvas state
@@ -66,12 +78,16 @@ const TeacherWhiteboard: React.FC = () => {
     const handleDisconnect = () => {
       console.log('Disconnected from server');
       setIsLive(false);
+      setIsConnecting(true);
     };
 
     const handleLiveError = (data: { message: string }) => {
       setError(data.message);
       setShowStartModal(false);
-      setTimeout(() => setError(null), 5000); // Clear error after 5 seconds
+      setIsLive(false);
+      if (canvasRef.current) {
+        canvasRef.current.clearCanvas();
+      }
     };
 
     socket.on('connect', handleConnect);
@@ -99,6 +115,8 @@ const TeacherWhiteboard: React.FC = () => {
 
   const confirmStartLive = async () => {
     const userId = localStorage.getItem('userId');
+    const socket = initializeSocket();
+
     if (userId && canvasRef.current) {
       setIsLive(true);
       setShowStartModal(false);
@@ -115,6 +133,8 @@ const TeacherWhiteboard: React.FC = () => {
 
   const confirmStopLive = () => {
     const userId = localStorage.getItem('userId');
+    const socket = initializeSocket();
+
     if (userId) {
       setIsLive(false);
       setShowStopModal(false);
@@ -129,6 +149,8 @@ const TeacherWhiteboard: React.FC = () => {
     if (canvasRef.current && isLive) {
       await canvasRef.current.clearCanvas();
       const userId = localStorage.getItem('userId');
+      const socket = initializeSocket();
+
       if (userId) {
         socket.emit('whiteboardUpdate', {
           teacherId: userId,
@@ -154,10 +176,13 @@ const TeacherWhiteboard: React.FC = () => {
             )}
             <button
               onClick={isLive ? handleStopLive : handleStartLive}
+              disabled={isConnecting}
               className={`flex items-center gap-2 px-4 py-2 rounded-md ${
-                isLive
-                  ? 'bg-red-500 hover:bg-red-600'
-                  : 'bg-green-500 hover:bg-green-600'
+                isConnecting
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : isLive
+                    ? 'bg-red-500 hover:bg-red-600'
+                    : 'bg-green-500 hover:bg-green-600'
               } text-white`}
             >
               {isLive ? (
@@ -166,7 +191,7 @@ const TeacherWhiteboard: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <Play size={20} /> Start Live
+                  <Play size={20} /> {isConnecting ? 'Connecting...' : 'Start Live'}
                 </>
               )}
             </button>
