@@ -89,6 +89,7 @@ const LoginForm = () => {
                 id="email"
                 name="email"
                 type="email"
+                placeholder="Enter your email"
                 className={`appearance-none rounded-md relative block w-full px-3 py-2 border ${
                   error.email ? 'border-red-500' : 'border-gray-300'
                 } placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm`}
@@ -103,6 +104,7 @@ const LoginForm = () => {
                 id="password"
                 name="password"
                 type="password"
+                placeholder='Enter your password'
                 className={`appearance-none rounded-md relative block w-full px-3 py-2 border ${
                   error.password ? 'border-red-500' : 'border-gray-300'
                 } placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm`}
