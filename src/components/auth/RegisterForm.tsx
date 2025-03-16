@@ -55,13 +55,6 @@ const RegisterForm = () => {
       return false;
     }
   
-    const phoneRegex = /^\+\d{1,3}\d{7,14}$/;
-    console.log('Phone Number:', phoneNumber); // Log the phone number
-    if (!phoneRegex.test(phoneNumber)) {
-      setError('Invalid phone number format');
-      return false;
-    }
-  
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return false;
