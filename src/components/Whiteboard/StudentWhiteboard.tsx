@@ -95,7 +95,7 @@ const StudentWhiteboard: React.FC = () => {
       const container = document.getElementById('student-whiteboard-container');
       if (container) {
         const width = container.clientWidth;
-        const height = Math.min(window.innerHeight - 200, width * 0.75);
+        const height = Math.min(window.innerHeight - 100, width * 0.9);
         console.log('Resizing canvas to:', { width, height }); // Log canvas size
         setCanvasSize({ width, height });
       }

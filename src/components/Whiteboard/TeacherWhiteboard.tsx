@@ -34,7 +34,7 @@ const TeacherWhiteboard: React.FC = () => {
       const container = document.getElementById('whiteboard-container');
       if (container) {
         const width = container.clientWidth;
-        const height = Math.min(window.innerHeight - 200, width * 0.75);
+        const height = Math.min(window.innerHeight - 100, width * 0.9);
         setCanvasSize({ width, height });
       }
     };
