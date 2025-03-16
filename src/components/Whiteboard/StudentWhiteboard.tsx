@@ -36,6 +36,7 @@ const StudentWhiteboard: React.FC = () => {
     if (!canvasRef.current) return;
 
     try {
+      console.log('Received whiteboard data:', data.whiteboardData); // Log received data
       lastUpdateRef.current = data.whiteboardData;
       await canvasRef.current.clearCanvas();
       if (data.whiteboardData && data.whiteboardData !== '[]') {
@@ -95,10 +96,11 @@ const StudentWhiteboard: React.FC = () => {
       if (container) {
         const width = container.clientWidth;
         const height = Math.min(window.innerHeight - 200, width * 0.75);
+        console.log('Resizing canvas to:', { width, height }); // Log canvas size
         setCanvasSize({ width, height });
       }
     };
-
+  
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);

@@ -68,7 +68,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       >
         <div className="flex flex-col h-full">
           <div className="p-4 flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-yellow-400">DIGIBOARD</h1>
+            <h1 className="text-2xl font-bold text-gold">DIGIBOARD</h1>
             <button
               onClick={toggleSidebar}
               className="lg:hidden text-gray-500 hover:text-gray-700"
@@ -116,7 +116,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Mobile Header */}
-        <div className="lg:hidden bg-green-600 shadow-sm p-4 flex items-center justify-between">
+        <div className="lg:hidden bg-green-950 shadow-sm p-4 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-bold text-gold">DIGIBOARD</h1>
             <button
