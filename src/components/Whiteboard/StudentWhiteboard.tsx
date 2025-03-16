@@ -100,7 +100,7 @@ const StudentWhiteboard: React.FC = () => {
         setCanvasSize({ width, height });
       }
     };
-  
+
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
