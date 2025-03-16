@@ -55,20 +55,14 @@ const RegisterForm = () => {
       return false;
     }
   
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
+    const phoneRegex = /^\+?[1-9]\d{1,14}$/; // Simple regex for international phone numbers
+    if (!phoneRegex.test(phoneNumber)) {
+      setError('Invalid phone number format');
       return false;
     }
   
-    // Check if phone number is already in use
-    const response = await fetch(`/api/check-phone?phoneNumber=${phoneNumber}`);
-    if (!response.ok) {
-      setError('Failed to validate phone number');
-      return false;
-    }
-    const data = await response.json();
-    if (data.exists) {
-      setError('Phone number is already in use');
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
       return false;
     }
   
