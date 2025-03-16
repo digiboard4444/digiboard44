@@ -78,10 +78,11 @@ const RegisterForm = () => {
       await register(formData);
       navigate(`/${formData.role}/dashboard`);
     } catch (err) {
+      console.error('Registration error:', err);
       setError('Registration failed');
     }
   };
-
+  
   return (
     <div className="min-h-screen bg-green-950 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-slate-100 p-6 rounded-lg shadow">
